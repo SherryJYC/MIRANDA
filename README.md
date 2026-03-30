@@ -77,7 +77,7 @@ Different models used in the paper are defined in `model_configs` in `configs/RU
 - baselines: `dann`, `adda`, `adaBN`, `CORAL`
 - ablations: `dann_shallow` (dann on mid-feature), `dann_shallow_rank_cos` (dann on mid-feature + rank loss), `dann_shallow_daln_nf` (dann on mid-feature + hybrid Norm)
 
-#### :open_file_folder: Datasets variants
+#### :open_file_folder: Dataset variants
 There are three datasets used in the paper, and you can choose which dataset to use inside `run-phenoformer-multispecies-spring.py`.
 - `structured_temporal`: Chronological in the paper.
 - `hotyear_temporal`: Annual temperature in the paper.
