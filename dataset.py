@@ -159,16 +159,32 @@ class ClimatePhenoDataset(Dataset):
             np.std(self.phenology_observations.elevation),
         )
         self.stats_latlon = (
-            np.mean(self.phenology_observations[["lat", "long"]], 0),
-            np.std(self.phenology_observations[["lat", "long"]], 0),
+            np.mean(self.phenology_observations[["lat", "long"]].to_numpy(), 0),
+            np.std(self.phenology_observations[["lat", "long"]].to_numpy(), 0),
         )
         self.stats_year = (
             np.mean(self.phenology_observations.year),
             np.std(self.phenology_observations.year),
         )
 
-        # Load mean yearly temperature
-        with open(self.data_dir / "spring_mean_years_temp.json") as file:
+        # Load mean yearly temperature (compute from Ti.csv if file is missing)
+        year_temp_file = self.data_dir / "spring_mean_years_temp.json"
+        if not year_temp_file.exists():
+            t = pd.read_csv(self.data_dir / "climate-data" / "Ti.csv", index_col=0)
+            spring_t = t[(t.index >= self.start_date) & (t.index <= self.end_date)]
+            years = []
+            for col in spring_t.columns:
+                year = col.split("_")[-1]
+                if year not in years:
+                    years.append(year)
+            years_temp = {}
+            for year in years:
+                year_cols = spring_t[[col for col in spring_t.columns if col.split("_")[-1] == year]]
+                years_temp[year] = float(year_cols.mean().mean())
+            with open(year_temp_file, "w") as f:
+                json.dump(years_temp, f)
+            print(f">> computed and saved {year_temp_file}")
+        with open(year_temp_file) as file:
             self.year_temp = json.loads(file.read()) # e.g. {'1964': 8}
         self.stats_year_temp = (
             np.array(list(self.year_temp.values())).mean(),
