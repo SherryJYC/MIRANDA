@@ -24,8 +24,9 @@ Plant phenology modelling aims to predict the timing of seasonal phases, such as
 <div style="display: flex; align-items: center;">
   <div style="flex: 1;">
     <!-- Left side text -->
-    MIRANDA is an architecture designed for species-level phenology forecasting. It takes daily climatic time series as input, and predicts the date of occurence of a given phenophase. 
-    The backbone architecture is PhenoFormer, which is a transformer model designed to predict the phenophases of multiple species at the same time. The proposed MIRANDA addresses domain shifts in phenology modelling via two key components: rank-based adversarial training on intermediate features (green parts) and hybrid layer normalization (blue parts).
+    MIRANDA is a domain adaptation method designed for species-level phenology forecasting. 
+    The backbone architecture is PhenoFormer, which is a transformer model designed to predict the phenophases of multiple species at the same time from an input meteorological time seres.  
+    The proposed MIRANDA addresses domain shifts in phenology modelling via two key components: rank-based adversarial training on intermediate features (green parts) and hybrid layer normalization (blue parts).
   </div>
   <div style="flex: 1; text-align: center;">
     <!-- Right side image -->
@@ -36,23 +37,18 @@ Plant phenology modelling aims to predict the timing of seasonal phases, such as
 ## Setting up 📦
 
 #### ⬇️ Download the dataset 
-The dataset is from [PhenoFormer work](https://github.com/VSainteuf/PhenoFormer/tree/v1.0).
-You can retrieve our dataset from the [Zenodo archive](https://zenodo.org/records/15045780). This dataset contains two subfolders: one version of the dataset formatted for R scripts and the other one for python scripts. Please use the `learning-models-data` subfolder for all python scripts. 
+We use the same dataset as in the  [PhenoFormer paper](https://besjournals.onlinelibrary.wiley.com/doi/abs/10.1111/2041-210X.70037).
+You can retrieve it from the [Zenodo archive](https://zenodo.org/records/15045780). 
+This dataset contains two subfolders: one version of the dataset formatted for R scripts and the other one for python scripts. 
+Please use the `learning-models-data` subfolder for all python scripts. 
 
 #### 🧑‍💻 Clone the repository and install requirements
 ```
 git clone git@github.com:SherryJYC/MIRANDA.git
 cd MIRANDA
-conda create --name miranda python==3.10
+conda create --name miranda python==3.12
 conda activate miranda
 pip install -r requirements.txt
-```
-We recommend to create a new virtual environment with `python==3.10` :
-
-> ⚠️ If you run into issues , make sure that your pip version is < 24.1 by running:
-
-```setup
-pip install pip==24.0
 ```
 
 #### ⚙ Hardware
@@ -98,4 +94,4 @@ To cite this work please use:
 - Data source: Federal Office of Meteorology and Climatology (MeteoSwiss)  
 - Meteorological data processing: Swiss Federal Institute for Forest, 
 Snow and Landscape Research (WSL)
-- Codes are largely adopted from [PhenoFormer work](https://github.com/VSainteuf/PhenoFormer/tree/v1.0).
+- Codes are largely adopted from the [PhenoFormer official repository](https://github.com/VSainteuf/PhenoFormer/tree/v1.0).

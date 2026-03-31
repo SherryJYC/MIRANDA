@@ -37,7 +37,7 @@ class ADDAModel(LitModel):
                 device=device
                 )
             
-            self.save_hyperparameters()
+            self.save_hyperparameters(ignore=["src_model", "tgt_model", "critic", "device"])
 
             self.target_list = target_list
 
@@ -216,7 +216,7 @@ def adaptation(model,
     )
 
     xp_name = "ADDA"
-    wandb_logger = WandbLogger(name=xp_name, save_dir=args.save_dir, offline=not args.wandb_online, project='phenocast')
+    wandb_logger = WandbLogger(name=xp_name, save_dir=args.save_dir, offline=not args.wandb_online, project='miranda')
     monitor_metric = "val/rmse"
     monitor_mode = "min"
     early_stop = EarlyStopping(monitor=monitor_metric, mode=monitor_mode, patience=30)
@@ -227,11 +227,14 @@ def adaptation(model,
     # ------------
     # train
     # ------------
-    trainer = pl.Trainer(logger=wandb_logger,
-                         callbacks=[early_stop, ckpt],
-                         log_every_n_steps=5,
-                         max_epochs=args.adapt_epochs,
-                         gpus=args.gpus)
+    trainer = pl.Trainer(
+        logger=wandb_logger,
+        accelerator="gpu" if args.gpus else "cpu",
+        devices=args.gpus if args.gpus else "auto",
+        callbacks=[early_stop, ckpt],
+        log_every_n_steps=5,
+        max_epochs=args.adapt_epochs,
+    )
     trainer.fit(model, datamodule=dm)
     # save best
     # wandb.save(ckpt.best_model_path)
@@ -240,7 +243,7 @@ def adaptation(model,
     # test
     # ------------
 
-    trainer.test(model=model, datamodule=dm, ckpt_path="best")
+    trainer.test(model=model, datamodule=dm, ckpt_path="best", weights_only=False)
 
     metrics = wandb_logger.experiment.summary
     metrics_dict = dict(metrics)
