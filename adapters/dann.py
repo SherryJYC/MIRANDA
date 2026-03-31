@@ -63,11 +63,8 @@ class DomainAdaptationModel(LitModel):
         if self.args.use_rank_pheno:
             self.rank_pheno_criterion = RnCLoss(temperature=self.args.rank_temperature, label_diff='cos', feature_sim='l1')
 
-    def forward(self, batch, residual=False):
-        if residual:
-            out = self.backbone.forward_residual(batch)
-        else:
-            out, _ = self.backbone(batch=batch, alpha=self.alpha, domain=self.domain) # {"predictions": predictions, "variances": variances}, domain_out
+    def forward(self, batch):
+        out, _ = self.backbone(batch=batch, alpha=self.alpha, domain=self.domain) # {"predictions": predictions, "variances": variances}, domain_out
         return out
     
     def forward_views(self, data, domain):
@@ -89,18 +86,9 @@ class DomainAdaptationModel(LitModel):
         source = batch["source_domain"]
         target = batch["target_domain"]
 
-        if self.args.use_two_views:
-            reg_src, domain_src = self.forward_views(source, "source")
-            _, domain_tgt = self.forward_views(target, "target")
-        elif self.args.use_rank_pheno or self.args.use_CORAL: # here feat_src & feat_tgt (learnt tokens) are final features fed to regressor, not necessarily the features for DANN
+        if self.args.use_rank_pheno or self.args.use_CORAL: # here feat_src & feat_tgt (learnt tokens) are final features fed to regressor, not necessarily the features for DANN
             reg_src, domain_src, feat_src = self.backbone(batch=source, alpha=self.alpha, domain="source", return_features=True) # {"predictions": predictions, "variances": variances}, domain_out
             reg_tgt, domain_tgt, feat_tgt = self.backbone(batch=target, alpha=self.alpha, domain="target", return_features=True)
-        elif self.args.residual:
-            reg_src = self.backbone.forward_residual(source)
-            # source['source_domain'] is not used after forward_residual, so remove it
-            source = source["target_domain"]
-            _, domain_src = self.backbone(batch=source, alpha=self.alpha, domain="source") # {"predictions": predictions, "variances": variances}, domain_out
-            _, domain_tgt = self.backbone(batch=target, alpha=self.alpha, domain="target")
         else:
             reg_src, domain_src = self.backbone(batch=source, alpha=self.alpha, domain="source") # {"predictions": predictions, "variances": variances}, domain_out
             _, domain_tgt = self.backbone(batch=target, alpha=self.alpha, domain="target")
@@ -281,28 +269,14 @@ def adaptation(model,
     # init DANN model
     adaptation_model = DANN(base_model=src_model.backbone, critic=critic, args=args)
 
-    if args.use_two_views:
-        print(">>>> use two views with augmentations")
-        dm = DomainAdaptationDataModule(
-            source_dataset=PairedDataset(datasets["train"], datasets["train_aug"]), 
-            target_dataset=PairedDataset(ConcatDataset([datasets["val"], datasets["test"]]), 
-                                         ConcatDataset([datasets["val_aug"], datasets["test_aug"]])),
-            train_dataset=datasets["train"],
-            val_dataset=datasets["val"],
-            test_dataset=datasets["test"],
-            batch_size=args.batch_size,
-            train_loader_residual = datasets["train_loader_residual"]
-        )
-    else:
-         dm = DomainAdaptationDataModule(
-            source_dataset=datasets["train_aug"],
-            target_dataset=ConcatDataset([datasets["val"], datasets["test"]]),  # for target during training
-            train_dataset=datasets["train"],
-            val_dataset=datasets["val"],
-            test_dataset=datasets["test"],
-            batch_size=args.batch_size,
-            train_loader_residual = datasets["train_loader_residual"]
-        )
+    dm = DomainAdaptationDataModule(
+        source_dataset=datasets["train_aug"],
+        target_dataset=ConcatDataset([datasets["val"], datasets["test"]]),  # for target during training
+        train_dataset=datasets["train"],
+        val_dataset=datasets["val"],
+        test_dataset=datasets["test"],
+        batch_size=args.batch_size,
+    )
 
     model = DomainAdaptationModel(backbone=adaptation_model, target_scaler=target_scaler, 
                                   target_list=src_model.backbone.target_list, 

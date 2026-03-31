@@ -79,7 +79,7 @@ class PairedDataset(Dataset):
 class DomainAdaptationDataModule(pl.LightningDataModule):
     def __init__(self, source_dataset, target_dataset, 
                  train_dataset, val_dataset, test_dataset, batch_size,
-                 train_loader_residual
+                 train_loader_residual=None,
                  ):
         super().__init__()
         self.source_dataset = source_dataset  # train

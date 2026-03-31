@@ -71,11 +71,8 @@ class LitModel(pl.LightningModule):
             self.test_outputs = defaultdict(list)
             self.test_output_file = Path(output_dir) / f"{args.unique_id}.csv"
 
-    def forward(self, batch, residual=False):
-        if residual:
-            y_hat = self.backbone.forward_residual(batch)
-        else:
-            y_hat = self.backbone(batch)
+    def forward(self, batch):
+        y_hat = self.backbone(batch)
         return y_hat
     
     def predict_unnormalised_dates(self, batch):
@@ -235,16 +232,6 @@ class LitModel(pl.LightningModule):
         ).mean(0)
         return loss_vals
     
-    def compute_loss_residual(self, predictions, batch, prefix=""):
-        label_src, label_tgt = batch["source_domain"]["target"], batch["target_domain"]["target"]
-        label_residual = {}
-        for t in self.target_list:
-            label_residual[t] = label_tgt[t] - label_src[t]
-            invalid = (label_tgt[t] == self.nan_value_target) | (label_src[t] == self.nan_value_target)
-            label_residual[t][invalid] = self.nan_value_target # will be filtered out in loss computation
-        loss_vals = self.compute_loss(predictions, label_residual, prefix)
-        return loss_vals
-    
     def compute_loss_var(self, predictions, targets, prefix=""):
         loss_vals, logvar_vals = self.multi_apply_var(self.loss_func, predictions, targets)
         loss_vals = {
@@ -273,12 +260,8 @@ class LitModel(pl.LightningModule):
                     d[t].cuda()
 
     def training_step(self, batch, batch_idx):
-        if self.args.residual:
-            y_hat = self.forward(batch=batch, residual=True)
-            y = batch["target_domain"]["target"]
-        else:
-            y_hat = self.forward(batch=batch) # y_hat = {"predictions": predictions, "variances": variances}
-            y = batch["target"]
+        y_hat = self.forward(batch=batch) # y_hat = {"predictions": predictions, "variances": variances}
+        y = batch["target"]
 
         # uncertainty estimation
         if "NLL" in self.args.loss:
@@ -314,17 +297,10 @@ class LitModel(pl.LightningModule):
         self.log_dictionary({**losses, **logvars}, on_epoch=True)
 
     def test_step(self, batch, batch_idx):
-        if "target_domain" in batch.keys():
-            y_hat = self.forward(batch=batch["target_domain"])
-            y_hat_residual = self.forward(batch=batch, residual=True) # pred_src + pred_residual
-            y = batch["target_domain"]["target"]
-            year = batch["target_domain"]["year"]
-            elevation = batch["target_domain"]["elevation"]
-        else:
-            y_hat = self.forward(batch=batch) # y_hat = {"predictions": predictions, "variances": variances}
-            y = batch["target"]
-            year = batch["year"]
-            elevation = batch["elevation"]
+        y_hat = self.forward(batch=batch) # y_hat = {"predictions": predictions, "variances": variances}
+        y = batch["target"]
+        year = batch["year"]
+        elevation = batch["elevation"]
 
         if "NLL" in self.args.loss:
             losses, logvars = self.compute_loss_var(y_hat, y, prefix="test")
@@ -345,20 +321,6 @@ class LitModel(pl.LightningModule):
                 self.test_outputs[f"true_{k}"].extend(label.cpu().tolist())
             self.test_outputs["year"].extend(year.cpu().tolist())
             self.test_outputs["elevation"].extend(elevation.cpu().tolist())
-            if "target_domain" in batch.keys():
-                for k in self.target_list:
-                    m, s = self.target_scaler[k]
-                    pred = y_hat_residual["predictions"][k] * s + m
-                    true_source = batch["source_domain"]["target"][k] * s + m
-                    self.test_outputs[f"pred_residual_{k}"].extend(pred.cpu().tolist())
-                    self.test_outputs[f"true_source_{k}"].extend(true_source.cpu().tolist())
-
-                    if "predictions_residual" in y_hat_residual.keys():
-                        pred_residual = y_hat_residual["predictions_residual"][k] * s
-                        self.test_outputs[f"pred_residual_residual_{k}"].extend(pred_residual.cpu().tolist())
-                    if "predictions_src" in  y_hat_residual.keys():
-                        pred_src = y_hat_residual["predictions_src"][k] * s + m
-                        self.test_outputs[f"pred_src_{k}"].extend(pred_src.cpu().tolist())
                     
 
     def on_validation_epoch_start(self):
@@ -430,7 +392,6 @@ def get_parser():
     parser.add_argument("--pheno_model", default="PhenoFormer", type=str, help="name of model used, [PhenoFormer, PhenoFormerReconstruct]")
     parser.add_argument("--gated_attn", default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument("--shallow", default=False, action=argparse.BooleanOptionalAction)
-    parser.add_argument("--residual", default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument("--norm_first", default=False, action=argparse.BooleanOptionalAction)
 
     # Training args
@@ -598,26 +559,6 @@ if __name__ == "__main__":
         shuffle=False,
         drop_last=False,
     )
-    if args.residual:
-        print(">>> using residual learning")
-        train_len = len(train_idxs)
-        train_loader1 = DataLoader(
-            Subset(dt_augm, train_idxs), #[train_len//3:]),
-            batch_size=args.batch_size,
-            drop_last=True,
-            num_workers=8,
-            shuffle=True,
-        )
-        train_loader2 = DataLoader(
-            Subset(dt_augm, train_idxs[::-1]), #[:train_len//3]),
-            batch_size=args.batch_size,
-            drop_last=True,
-            num_workers=8,
-            shuffle=True,
-        )
-        val_loader = CombinedLoader(source_loader=train_loader, target_loader=val_loader, cycle=False)
-        test_loader = CombinedLoader(source_loader=train_loader, target_loader=test_loader, cycle=False)
-        train_loader = CombinedLoader(source_loader=train_loader1, target_loader=train_loader2)
 
     print(f"dataset length: len(train)={len(train_loader)}, len(val)={len(val_loader)}, len(test)={len(test_loader)}")
 
@@ -641,7 +582,6 @@ if __name__ == "__main__":
         use_nll="NLL" in args.loss,
         gated_attn=args.gated_attn,
         use_cross_attn=args.use_cross_attn,
-        residual=args.residual,
         norm_first=args.norm_first,
         load_M1=args.load_M1,
     )
@@ -765,6 +705,5 @@ if __name__ == "__main__":
                       "train": Subset(dt, train_idxs),
                       "val": Subset(dt, val_idxs),
                       "test": Subset(dt, test_idxs),
-                      "train_loader_residual": train_loader if args.residual else None
                       }
         )

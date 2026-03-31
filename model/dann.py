@@ -9,7 +9,6 @@ import torch
 import torch.nn as nn
 from torch.autograd import Function
 from model.transformer_pytorch import TransformerEncoderLayer
-from model.architecture import InceptionFormer, GRUFormer
 from model.discriminator import DiscriminatorTrans
 from adapters.norms import DomainAgnosticLayerNorm, AdaptiveBatchNorm1d
 
@@ -30,7 +29,7 @@ class DANN(nn.Module):
         
         self.regression_only = regression_only
 
-        if args.shallow and not isinstance(self.base_model, InceptionFormer):
+        if args.shallow:
             # self.another_transformer = copy.deepcopy(self.base_model.transformer)
             self.another_transformer = nn.ModuleList(
             [
@@ -61,20 +60,10 @@ class DANN(nn.Module):
     def forward(self, batch, return_attention=False, alpha=0, domain="source", return_features=False, 
                 only_features=False):
 
-        if isinstance(self.base_model, InceptionFormer) or isinstance(self.base_model, GRUFormer):
-            out, attention = self.base_model.forward_features(batch=batch, return_attention=return_attention, domain=domain, return_features=True)
-            # out = {"transformer_features": out, "features": inception_out.permute(0, 2, 1)}
-            features, domain_features = out["transformer_features"], out["features"] # [b, t, c], if use_cross_attn, domain features't = n_task
- 
-            if not isinstance(self.critic, DiscriminatorTrans) and not domain_features.shape[1] == self.n_task:
-                # global avg pooling for MLP-based critic
-                domain_features = domain_features.mean(dim=1, keepdim=True) # [b, 1, c]
-        else:
-            features, attention = self.base_model.forward_features(batch, return_attention, domain)
-            domain_features = features[:, :self.n_task, :]
+        features, attention = self.base_model.forward_features(batch, return_attention, domain)
+        domain_features = features[:, :self.n_task, :]
 
         # regression
-
         if hasattr(self, "another_transformer"):
             if return_attention:
                 attentions = []
@@ -151,40 +140,6 @@ class DANN(nn.Module):
             out["reconstructed"] = x_re
 
         return out
-
-    def forward_residual(self, batch, domain="source"):
-        source, target = batch["source_domain"], batch["target_domain"]
-
-        out_src = self.forward(source, only_features=True, domain=domain)
-        task_embeddings_src = out_src[:, : self.n_task, :]
-        out_tgt = self.forward(target, only_features=True, domain=domain)
-        task_embeddings_tgt = out_tgt[:, : self.n_task, :]
-
-        # no residual
-        # preds = self.base_model.linear_decoder(task_embeddings_tgt)
-        preds_src = self.base_model.linear_decoder(task_embeddings_src)
-
-        # residual
-        # preds_residual = preds - preds_src
-        preds_residual = self.base_model.residual_linear_decoder(self.base_model.residual_cross_attn(query=task_embeddings_tgt, 
-                                                                               key=task_embeddings_src, 
-                                                                               value=task_embeddings_src)[0])
-
-        predictions_src = {
-            self.target_list[i]: chunk[:, i, :].squeeze(1)
-            for i, chunk in enumerate(preds_src.chunk(self.n_task, dim=2))
-        }
-
-        # combine for final predictions
-        predictions = {}
-        for i, (preds_src_chunk, preds_residual_chunk) in enumerate(zip(preds_src.chunk(self.n_task, dim=2), 
-                                                                    preds_residual.chunk(self.n_task, dim=2))):
-            t = self.target_list[i]
-            predictions[t] = preds_residual_chunk[:, i, :].squeeze(1) + preds_src_chunk[:, i, :].squeeze(1)
-
-        output = {"predictions": predictions, "predictions_src": predictions_src}#, "predictions_residual": predictions_residual}
-            
-        return output
 
 
 class ReverseLayerF(Function):
