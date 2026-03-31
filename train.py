@@ -39,7 +39,7 @@ class LitModel(pl.LightningModule):
         output_dir="output/csv"
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=["backbone", "device"])
+        self.save_hyperparameters(ignore=["backbone", "device", "args", "target_scaler"])
         self.backbone = backbone
         self.target_scaler = target_scaler
         self.target_list = backbone.target_list
@@ -471,7 +471,7 @@ if __name__ == "__main__":
     else:
         pl.seed_everything(1234)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if (args.gpus and torch.cuda.is_available()) else "cpu")
 
     # ------------
     # Dataset 
@@ -611,7 +611,8 @@ if __name__ == "__main__":
             raise "If not running a N-fold cv, please specify the --xp_name argument"
         name = args.xp_name
 
-    wandb_logger = WandbLogger(name=name, save_dir=args.save_dir, offline=not args.wandb_online, project='phenocast')
+    wandb_logger = WandbLogger(name=name, save_dir=args.save_dir, offline=not args.wandb_online, project='miranda')
+    wandb_logger.log_hyperparams(vars(args))
     logger = CSVLogger(save_dir=args.save_dir, name=name)
 
     monitor_metric = "val/rmse"
@@ -622,7 +623,7 @@ if __name__ == "__main__":
     )
     trainer = pl.Trainer(
         logger=None if args.adapt else wandb_logger,
-        accelerator="gpu" if args.gpus else "auto",
+        accelerator="gpu" if args.gpus else "cpu",
         devices=args.gpus if args.gpus else "auto",
         callbacks=[early_stop, ckpt],
         log_every_n_steps=5,
@@ -653,7 +654,8 @@ if __name__ == "__main__":
             result = trainer.test(model=model, dataloaders=test_loader)
         else:
             result = trainer.test(
-                model=model, dataloaders=test_loader, ckpt_path=ckpt.best_model_path
+                model=model, dataloaders=test_loader, ckpt_path=ckpt.best_model_path,
+                weights_only=False,
             )
             best_path = ckpt.best_model_path
             print(f">> best ckpt path {best_path}")
@@ -681,7 +683,8 @@ if __name__ == "__main__":
                     result = trainer.test(model=model, dataloaders=ds)
                 else:
                     result = trainer.test(
-                        model=model, dataloaders=ds, ckpt_path=ckpt.best_model_path
+                        model=model, dataloaders=ds, ckpt_path=ckpt.best_model_path,
+                        weights_only=False,
                     )
                 print(f'------------------ {split} ------------------')
                 print(result)
