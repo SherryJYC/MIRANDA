@@ -59,7 +59,23 @@ model_configs = dict(
         d_model=64,
         dim_feedforward=256,
     ),
-    # adaptations
+    # adaptation
+    MIRANDA=dict( # dann_shallow_rank_cos_daln_nf
+        adapt_norm_type="danl",
+        adapt_norm_first=True,
+        rank_feature_sim="cos",
+        gan_loss_type="rank",
+        shallow=True,
+        adapt=True,
+        adapt_from_scratch=True,
+        adapter="dann",
+        discriminator_type="mlp",
+        pheno_model="PhenoFormer",
+        n_layers=1, # this is layer used by both phenoformer and dann
+        nhead=8,
+        d_model=64,
+        dim_feedforward=256,
+    ),
     dann=dict(
         gan_loss_type="gan",
         adapt=True,
@@ -222,22 +238,6 @@ model_configs = dict(
     ),
     dann_shallow_rank_cos_daln=dict(
         adapt_norm_type="danl",
-        rank_feature_sim="cos",
-        gan_loss_type="rank",
-        shallow=True,
-        adapt=True,
-        adapt_from_scratch=True,
-        adapter="dann",
-        discriminator_type="mlp",
-        pheno_model="PhenoFormer",
-        n_layers=1, # this is layer used by both phenoformer and dann
-        nhead=8,
-        d_model=64,
-        dim_feedforward=256,
-    ),
-    MIRANDA=dict( # dann_shallow_rank_cos_daln_nf
-        adapt_norm_type="danl",
-        adapt_norm_first=True,
         rank_feature_sim="cos",
         gan_loss_type="rank",
         shallow=True,
