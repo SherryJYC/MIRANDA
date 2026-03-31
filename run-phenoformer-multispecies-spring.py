@@ -10,10 +10,10 @@ from configs.RUN_CONFIGS import (datasplit_configs, model_configs,
 This script can run the 10 folds of each multi-task configuration.
 """
 
-data_folder = "data/PhenoFormer-data/learning-models-data"
-save_dir = "output/"
-wandb_online = True
-save_test_results=True
+data_folder = "../PhenoCast/data/PhenoFormer-data/learning-models-data"
+save_dir = "../PhenoCast/output/"
+wandb_online = False
+save_test_results=False
 
 # ----------------------------------- IMPORTANT CONFIGS -----------------------------------------------------
 dict_model_to_do_list = {

@@ -433,7 +433,6 @@ def get_parser():
     parser.add_argument("--rank_feature_sim", default="l2", type=str, help="type of feature similarity used in rank loss")
     parser.add_argument("--rank_label", default="year_normalised", type=str, help="label used for rank-based contrastive learning")
     parser.add_argument("--rank_temperature", type=float, default=0.1, help="temperature paremeter for rank loss")
-    parser.add_argument("--use_rank_pheno", default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument("--save_test_results", default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument("--adapt_norm_type", default="layernorm", type=str, help="type of norm layer of transformer encoder (high-level one, not used for DA)")
     parser.add_argument("--adapt_norm_first", default=False, action=argparse.BooleanOptionalAction)

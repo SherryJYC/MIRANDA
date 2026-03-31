@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 
-from model.transformer_pytorch import TransformerEncoderLayer, TransformerDecoderLayer
-from model.inception import InceptionBlock
+from model.transformer_pytorch import TransformerEncoderLayer
 
 class PhenoFormer(nn.Module):
     def __init__(
@@ -21,10 +20,7 @@ class PhenoFormer(nn.Module):
         phases_as_input=None,
         norm_type="layernorm",
         norm_first=False,
-        use_nll=False,
         gated_attn=False,
-        use_cross_attn=False,
-        residual=False,
         load_M1=False,
         **kwargs
     ):
