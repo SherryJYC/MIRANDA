@@ -36,8 +36,8 @@ class DomainAdaptationModel(LitModel):
             args=args,
             device=device
             )
-        
-        self.save_hyperparameters()
+
+        self.save_hyperparameters(ignore=["backbone", "device"])
 
         self.target_list = target_list
 
@@ -259,11 +259,14 @@ def adaptation(model,
     # ------------
     # train
     # ------------
-    trainer = pl.Trainer(logger=wandb_logger,
-                         callbacks=[early_stop, ckpt],
-                         log_every_n_steps=5,
-                         max_epochs=args.adapt_epochs,
-                         gpus=args.gpus)
+    trainer = pl.Trainer(
+        logger=wandb_logger,
+        accelerator="gpu" if args.gpus else "auto",
+        devices=args.gpus if args.gpus else "auto",
+        callbacks=[early_stop, ckpt],
+        log_every_n_steps=5,
+        max_epochs=args.adapt_epochs,
+    )
     trainer.fit(model, datamodule=dm)
     # save best
     # wandb.save(ckpt.best_model_path)

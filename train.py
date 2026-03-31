@@ -39,7 +39,7 @@ class LitModel(pl.LightningModule):
         output_dir="output/csv"
     ):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["backbone", "device"])
         self.backbone = backbone
         self.target_scaler = target_scaler
         self.target_list = backbone.target_list
@@ -249,7 +249,7 @@ class LitModel(pl.LightningModule):
     def log_dictionary(self, dct, **kwargs):
         for name, value in dct.items():
             if not torch.isnan(value):
-                self.log(name, value, kwargs)
+                self.log(name, value, **kwargs)
 
     def on_fit_start(
         self,
@@ -451,10 +451,12 @@ def get_parser():
     parser.add_argument("--unique_id", default=None, help="unique id of a run")
 
 
+    parser.add_argument("--gpus", default=None, type=int, help="number of GPUs to use (None = CPU)")
+    parser.add_argument("--max_epochs", default=200, type=int, help="maximum number of training epochs")
+
     parser.set_defaults(
          elevation=False, latlon=False,
     )
-    parser = pl.Trainer.add_argparse_args(parser)
     return parser
 
 
@@ -620,11 +622,12 @@ if __name__ == "__main__":
     )
     trainer = pl.Trainer(
         logger=None if args.adapt else wandb_logger,
-        gpus=args.gpus,
+        accelerator="gpu" if args.gpus else "auto",
+        devices=args.gpus if args.gpus else "auto",
         callbacks=[early_stop, ckpt],
         log_every_n_steps=5,
         max_epochs=args.max_epochs,
-        gradient_clip_val=args.grad_clip,
+        gradient_clip_val=args.grad_clip if args.grad_clip > 0 else None,
     )
 
     if not args.adapt_from_scratch: # do normal training before adaptation
@@ -635,7 +638,7 @@ if __name__ == "__main__":
             # load pretrained model
             weight_files = [f for f in os.listdir(args.pretrained_weights_folder) if f.endswith('.ckpt')]
             weight_path = Path(args.pretrained_weights_folder) / weight_files[0]
-            checkpoint = torch.load(weight_path)
+            checkpoint = torch.load(weight_path, weights_only=False)
             model.load_state_dict(checkpoint['state_dict'])
             model.target_scaler = checkpoint['hyper_parameters']['target_scaler']
             model.eval()
@@ -654,7 +657,6 @@ if __name__ == "__main__":
             )
             best_path = ckpt.best_model_path
             print(f">> best ckpt path {best_path}")
-            model.load_from_checkpoint(best_path)
 
             metrics = wandb_logger.experiment.summary
             metrics_dict = dict(metrics)

@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from model.transformer_pytorch import TransformerEncoderLayer
 
+
 class PhenoFormer(nn.Module):
     def __init__(
         self,
