@@ -60,8 +60,6 @@ class DomainAdaptationModel(LitModel):
             if self.args.use_memory:
                 print(f">> using rank memory bank, mem_bank_size={self.args.mem_bank_size}")
                 self.memorybank = DomainContrastiveMemory(dim=self.args.d_model, size=self.args.mem_bank_size)
-        if self.args.use_rank_pheno:
-            self.rank_pheno_criterion = RnCLoss(temperature=self.args.rank_temperature, label_diff='cos', feature_sim='l1')
 
     def forward(self, batch):
         out, _ = self.backbone(batch=batch, alpha=self.alpha, domain=self.domain) # {"predictions": predictions, "variances": variances}, domain_out
@@ -86,7 +84,7 @@ class DomainAdaptationModel(LitModel):
         source = batch["source_domain"]
         target = batch["target_domain"]
 
-        if self.args.use_rank_pheno or self.args.use_CORAL: # here feat_src & feat_tgt (learnt tokens) are final features fed to regressor, not necessarily the features for DANN
+        if self.args.use_CORAL: # here feat_src & feat_tgt (learnt tokens) are final features fed to regressor, not necessarily the features for DANN
             reg_src, domain_src, feat_src = self.backbone(batch=source, alpha=self.alpha, domain="source", return_features=True) # {"predictions": predictions, "variances": variances}, domain_out
             reg_tgt, domain_tgt, feat_tgt = self.backbone(batch=target, alpha=self.alpha, domain="target", return_features=True)
         else:
@@ -107,33 +105,8 @@ class DomainAdaptationModel(LitModel):
         # compute domain loss for source & target domain
         if self.args.gan_loss_type == "rank":
             rank_label = self.args.rank_label
-            if hasattr(self, "memorybank"):
-                 # update bank
-                self.memorybank.update(features=domain_src.detach(), labels=source[rank_label].unsqueeze(1), domain="source")
-                self.memorybank.update(features=domain_tgt.detach(), labels=target[rank_label].unsqueeze(1), domain="target")
-
-                # get negative samples from bank
-                bank_src = self.memorybank.get_bank(domain="source") # used as negative samples for target
-                bank_tgt = self.memorybank.get_bank(domain="target")
-
-                # compute loss
-                loss_rank_src = self.rank_criterion(torch.cat((domain_src, bank_tgt["features"]), dim=0),
-                                                torch.cat((source[rank_label].unsqueeze(1), bank_tgt["labels"]), dim=0))
-                loss_rank_tgt = self.rank_criterion(torch.cat((domain_tgt, bank_src["features"]), dim=0),
-                                                torch.cat((target[rank_label].unsqueeze(1), bank_src["labels"]), dim=0))
-                loss_rank = 0.5 * (loss_rank_src + loss_rank_tgt)
-            else:
-                if self.args.rank_mask:
-                    loss_rank = 0
-                    # [B, n_task, d_model]
-                    for i, t in enumerate(self.target_list):
-                        valid = source["target"][t] != self.nan_value_target
-                        loss_rank += self.rank_criterion(torch.cat((domain_src[:, i, :][valid], domain_tgt[:, i, :][valid]), dim=0),
-                                                    torch.cat((source[rank_label][valid], target[rank_label][valid]), dim=0).unsqueeze(1))
-                    loss_rank /= len(self.target_list)
-                else:
-                    loss_rank = self.rank_criterion(torch.cat((domain_src, domain_tgt), dim=0),
-                                                    torch.cat((source[rank_label], target[rank_label]), dim=0).unsqueeze(1))
+            loss_rank = self.rank_criterion(torch.cat((domain_src, domain_tgt), dim=0),
+                                                torch.cat((source[rank_label], target[rank_label]), dim=0).unsqueeze(1))
             domain_losses = {"train/L_rank": loss_rank}
             loss = loss_src_label["train/loss"] + loss_rank * self.args.rank_multiply
         elif self.args.gan_loss_type == "no_domain_loss":
@@ -154,15 +127,6 @@ class DomainAdaptationModel(LitModel):
                 coral_loss += coral(feat_src[:, i, :], feat_tgt[:, i, :])
             loss_src_label["train/CORAL_loss"] = coral_loss / len(self.target_list)
             loss += loss_src_label["train/CORAL_loss"] * self.alpha
-
-        # rank-phenology loss
-        if self.args.use_rank_pheno:
-            loss_rank_src = 0
-            loss_rank_tgt = 0
-            for i, t in enumerate(self.target_list):
-                loss_rank_src += self.rank_criterion(feat_src[:, i, :].squeeze(), source["target"][t].unsqueeze(1))
-            domain_losses[f"train/L_rank_pheno_src"] = loss_rank_src / self.backbone.n_task
-            loss = loss + domain_losses[f"train/L_rank_pheno_src"]
 
         self.log_dictionary({**domain_losses, **loss_src_label, **metrics, **logvars}, on_step=True)
         
