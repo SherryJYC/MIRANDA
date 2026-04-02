@@ -9,7 +9,7 @@
 CVPR EarthVision workshop 2026
 <br>
 <br>
-[![arXiv](https://img.shields.io/badge/arxiv-xxxxxx-b31b1b.svg)](placeholder)
+[![arXiv](https://img.shields.io/badge/arxiv-2604.00800-b31b1b.svg)](https://arxiv.org/abs/2604.00800)
 [![Project page](https://img.shields.io/badge/Project_page-8A2BE2)](https://sherryjyc.github.io/MIRANDA/)
 <br>
 <br>
